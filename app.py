@@ -27,16 +27,13 @@ if uploaded_file:
         text = ""
 
         for page in pdf.pages:
-
             page_text = page.extract_text()
 
             if page_text:
                 text += page_text + "\n\n"
 
-    st.subheader("Extracted Text")
-    st.write(text)
-
-    st.subheader("📋 Invoice Information")
+    with st.expander("📄 View Extracted Text"):
+     st.write(text)
 
     invoice_number = ""
     invoice_date = ""
@@ -46,22 +43,34 @@ if uploaded_file:
     invoice_match = re.search(r"Invoice #:\s*([A-Za-z0-9\-]+)", text)
     if invoice_match:
         invoice_number = invoice_match.group(1)
-        st.write("📄 Invoice Number:", invoice_number)
 
     date_match = re.search(r"Date:\s*(\d{1,2}\s\w+\s\d{4})", text)
     if date_match:
         invoice_date = date_match.group(1)
-        st.write("📅 Date:", invoice_date)
 
     customer_match = re.search(r"Bill To:\s*(.*?)\s*Item", text)
     if customer_match:
         customer = customer_match.group(1)
-        st.write("👤 Customer:", customer)
 
     total_match = re.search(r"Total\s*([^\s]+)", text)
     if total_match:
         total = total_match.group(1).replace("n", "₹")
-        st.write("💰 Total Amount:", total)
+
+    st.subheader("📋 Invoice Summary")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("📄 Invoice Number", invoice_number)
+
+    with col2:
+        st.metric("📅 Date", invoice_date)
+
+    with col3:
+        st.metric("👤 Customer", customer)
+
+    with col4:
+        st.metric("💰 Total Amount", total)
 
     invoice_data = {
         "Invoice Number": [invoice_number],
@@ -73,8 +82,7 @@ if uploaded_file:
     df = pd.DataFrame(invoice_data)
 
     st.subheader("📊 Invoice Table")
-
-    st.dataframe(df)
+    st.dataframe(df, width="stretch")
 
     csv = df.to_csv(index=False).encode("utf-8")
 
@@ -87,14 +95,14 @@ if uploaded_file:
 
     buffer = BytesIO()
 
-with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-    df.to_excel(writer, index=False, sheet_name="Invoice")
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Invoice")
 
-excel_data = buffer.getvalue()
+    excel_data = buffer.getvalue()
 
-st.download_button(
-    label="📥 Download Excel",
-    data=excel_data,
-    file_name="invoice_data.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+    st.download_button(
+        label="📥 Download Excel",
+        data=excel_data,
+        file_name="invoice_data.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
