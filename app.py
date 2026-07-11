@@ -2,6 +2,7 @@ import streamlit as st
 import pdfplumber
 import re
 import pandas as pd
+import matplotlib.pyplot as plt
 from io import BytesIO
 
 st.set_page_config(
@@ -27,6 +28,7 @@ if uploaded_file:
         text = ""
 
         for page in pdf.pages:
+
             page_text = page.extract_text()
 
             if page_text:
@@ -67,8 +69,6 @@ if uploaded_file:
     if customer_match:
         customer = customer_match.group(1).strip()
 
-    # ----------- FIXED TOTAL REGEX -----------
-
     total_matches = re.findall(
         r"Total:\s*([0-9,]+)",
         text,
@@ -79,8 +79,6 @@ if uploaded_file:
         total = "₹" + total_matches[-1]
     else:
         total = "Not Found"
-
-    # ---------------- Summary ----------------
 
     st.subheader("📋 Invoice Summary")
 
@@ -97,8 +95,7 @@ if uploaded_file:
 
     with c4:
         st.metric("💰 Total Amount", total)
-
-    # ---------------- Invoice Items ----------------
+            # ---------------- Invoice Items ----------------
 
     st.subheader("📦 Invoice Items")
 
@@ -129,113 +126,118 @@ if uploaded_file:
             width="stretch"
         )
 
+        # ---------------- Invoice Analytics ----------------
+
         st.subheader("📈 Invoice Analytics")
 
         total_items = len(items_df)
-
         subtotal = items_df["Amount"].sum()
-
         average_price = items_df["Amount"].mean()
-
         highest_price = items_df["Amount"].max()
 
         a1, a2, a3, a4 = st.columns(4)
 
         with a1:
-            st.metric(
-                "📦 Total Items",
-                total_items
-            )
+            st.metric("📦 Total Items", total_items)
 
         with a2:
-            st.metric(
-                "💰 Subtotal",
-                f"₹{subtotal:,}"
-            )
+            st.metric("💰 Subtotal", f"₹{subtotal:,}")
 
         with a3:
-            st.metric(
-                "📊 Average",
-                f"₹{average_price:,.0f}"
-            )
+            st.metric("📊 Average", f"₹{average_price:,.0f}")
 
         with a4:
-            st.metric(
-                "🏆 Highest",
-                f"₹{highest_price:,}"
+            st.metric("🏆 Highest", f"₹{highest_price:,}")
+
+        # ---------------- Bar Chart ----------------
+
+        st.subheader("📊 Item Amount Chart")
+
+        chart_data = items_df.set_index("Item")
+
+        st.bar_chart(chart_data["Amount"])
+
+        st.subheader("🥧 Revenue Distribution")
+
+        fig, ax = plt.subplots(figsize=(8, 8))
+
+        ax.pie(
+            items_df["Amount"],
+            labels=items_df["Item"],
+            autopct="%1.1f%%",
+            startangle=90
+        )
+
+        ax.axis("equal")
+        st.pyplot(fig)
+                
+                # ---------------- Search ----------------
+
+        st.subheader("🔍 Search in Invoice")
+
+        search = st.text_input("Type anything to search")
+
+        if search:
+
+            if search.lower() in text.lower():
+                st.success("✅ Found in invoice")
+            else:
+                st.error("❌ Not Found")
+
+        # ---------------- Invoice Summary Table ----------------
+
+        invoice_data = {
+            "Invoice Number": [invoice_number],
+            "Date": [invoice_date],
+            "Customer": [customer],
+            "Total Amount": [total]
+        }
+
+        df = pd.DataFrame(invoice_data)
+
+        st.subheader("📊 Invoice Summary Table")
+
+        st.dataframe(
+            df,
+            width="stretch"
+        )
+
+        # ---------------- Download Buttons ----------------
+
+        col1, col2 = st.columns(2)
+
+        csv = df.to_csv(index=False).encode("utf-8")
+
+        with col1:
+
+            st.download_button(
+                label="⬇ Download CSV",
+                data=csv,
+                file_name="invoice_data.csv",
+                mime="text/csv"
             )
 
-    # ---------------- Search ----------------
+        buffer = BytesIO()
 
-    st.subheader("🔍 Search in Invoice")
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            df.to_excel(
+                writer,
+                index=False,
+                sheet_name="Invoice"
+            )
 
-    search = st.text_input("Type anything to search")
+        excel_data = buffer.getvalue()
 
-    if search:
+        with col2:
 
-        if search.lower() in text.lower():
-            st.success("✅ Found in invoice")
-        else:
-            st.error("❌ Not Found")
-                # ---------------- Invoice Summary Table ----------------
+            st.download_button(
+                label="📥 Download Excel",
+                data=excel_data,
+                file_name="invoice_data.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
-    invoice_data = {
-        "Invoice Number": [invoice_number],
-        "Date": [invoice_date],
-        "Customer": [customer],
-        "Total Amount": [total]
-    }
+        st.success("✅ Invoice processed successfully!")
 
-    df = pd.DataFrame(invoice_data)
-
-    st.subheader("📊 Invoice Summary Table")
-
-    st.dataframe(
-        df,
-        width="stretch"
-    )
-
-    # ---------------- CSV Download ----------------
-
-    csv = df.to_csv(index=False).encode("utf-8")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        st.download_button(
-            label="⬇ Download CSV",
-            data=csv,
-            file_name="invoice_data.csv",
-            mime="text/csv"
-        )
-
-    # ---------------- Excel Download ----------------
-
-    buffer = BytesIO()
-
-    with pd.ExcelWriter(
-        buffer,
-        engine="openpyxl"
-    ) as writer:
-
-        df.to_excel(
-            writer,
-            index=False,
-            sheet_name="Invoice"
-        )
-
-    excel_data = buffer.getvalue()
-
-    with col2:
-
-        st.download_button(
-            label="📥 Download Excel",
-            data=excel_data,
-            file_name="invoice_data.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-    st.divider()
-
-    st.success("✅ Invoice processed successfully!")
+    else:
+        st.warning("⚠️ No invoice items found in this PDF.")
